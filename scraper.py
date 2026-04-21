@@ -8,11 +8,13 @@ BASE_URL = "https://pamor.jogjaprov.go.id"
 LIST_URL = f"{BASE_URL}/data_kejadian"
 
 session = requests.Session()
+REQUEST_TIMEOUT = 20
+REQUEST_DELAY_SECONDS = 0.2
 
 
 def get_csrf():
     """Fetch CSRF token from list page."""
-    res = session.get(LIST_URL)
+    res = session.get(LIST_URL, timeout=REQUEST_TIMEOUT)
     soup = BeautifulSoup(res.text, "html.parser")
     token = soup.find("meta", {"name": "csrf-token"})
     return token["content"] if token else None
@@ -35,7 +37,7 @@ def get_list_data(csrf, start_date, end_date, page=1):
     }
 
     url = f"{LIST_URL}?page={page}"
-    res = session.post(url, data=payload, headers=headers)
+    res = session.post(url, data=payload, headers=headers, timeout=REQUEST_TIMEOUT)
     soup = BeautifulSoup(res.text, "html.parser")
 
     rows = soup.select("tbody tr")
@@ -65,7 +67,7 @@ def get_list_data(csrf, start_date, end_date, page=1):
 def get_detail(id_):
     """Fetch detail page HTML by event ID."""
     url = f"{BASE_URL}/data_kejadian/detail/{id_}"
-    res = session.get(url)
+    res = session.get(url, timeout=REQUEST_TIMEOUT)
     return res.text
 
 
@@ -185,7 +187,7 @@ def main():
                 except Exception as e:
                     print(f"Error: {e}")
 
-                time.sleep(0.5)
+                time.sleep(REQUEST_DELAY_SECONDS)
 
     df = pd.DataFrame(all_data)
 
@@ -219,7 +221,9 @@ def main():
     df = df.replace("#NAME?", None)
 
     # Trim surrounding spaces from all object columns.
-    df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
+    object_cols = df.select_dtypes(include=["object"]).columns
+    if len(object_cols) > 0:
+        df[object_cols] = df[object_cols].apply(lambda col: col.str.strip())
     
     cols_to_clean = ["Kronologi", "Penyebab", "Pemicu"]
 
